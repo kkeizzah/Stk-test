@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>M-Pesa STK Push • HELB Disbursement</title>
+    <style>
+        :root {
+            --bg: #0f0f0f;
+            --card: #141414;
+            --brand: #ffd400;
+            --muted: #9b9b9b;
+            --success: #4CAF50;
+            --error: #F44336;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+            background: linear-gradient(180deg, #070707 0%, #0f0f0f 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            line-height: 1.5;
+        }
+        
+        .card {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card);
+            border-radius: 12px;
+            padding: 28px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+        
+        h1 {
+            margin: 0 0 8px;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        
+        .lead {
+            margin: 0 0 24px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #ddd;
+            font-weight: 500;
+        }
+        
+        input[type="tel"],
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 8px;
+            border: 1px solid #222;
+            background: #0d0d0d;
+            color: #fff;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: var(--brand);
+        }
+        
+        .small {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 6px;
+        }
+        
+        .flex-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin: 20px 0;
+        }
+        
+        .toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .api-url-group {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .api-url-input {
+            width: 150px;
+            padding: 8px 10px;
+            font-size: 13px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 14px 16px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 16px;
+            transition: opacity 0.2s;
+        }
+        
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: var(--brand);
+            color: #000;
+        }
+        
+        .btn-secondary {
+            background: #222;
+            color: #fff;
+            border: 1px solid #2a2a2a;
+        }
+        
+        .note {
+            font-size: 13px;
+            color: var(--muted);
+            margin-top: 20px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+        }
+        
+        .log {
+            margin-top: 20px;
+            background: #0b0b0b;
+            border: 1px dashed #222;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            color: #dcdcdc;
+            max-height: 220px;
+            overflow: auto;
+        }
+        
+        .log-line {
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        
+        .status-success {
+            color: var(--success);
+        }
+        
+        .status-fail {
+            color: var(--error);
+        }
+        
+        .status-info {
+            color: var(--brand);
+        }
+    </style>
+</head>
+<body>
+    <div class="card" role="main" aria-labelledby="title">
+        <h1 id="title">M-Pesa STK Push — HELB Disbursement</h1>
+        <p class="lead">Initiate an STK Push for <strong>KES 25,000</strong> to Till <strong>6434270</strong></p>
+        
+        <div class="form-group">
+            <label for="phone">Phone number (format: 2547XXXXXXXX)</label>
+            <input id="phone" type="tel" inputmode="numeric" placeholder="2547XXXXXXXX" value="254700000000">
+        </div>
+        
+        <div class="flex-row">
+            <div class="toggle">
+                <input id="useMock" type="checkbox" checked>
+                <label for="useMock">Use mock mode (no backend)</label>
+            </div>
+            
+            <div class="api-url-group">
+                <label for="apiUrl">API URL</label>
+                <input id="apiUrl" class="api-url-input" type="text" value="api/stk_push.php">
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="sendBtn" class="btn-primary">Send STK Push</button>
+            <button id="clearBtn" class="btn-secondary" type="button">Clear Log</button>
+        </div>
+        
+        <div class="note">
+            <strong>Note:</strong> STK popup text is controlled by Safaricom. This form sends a request to the configured API endpoint with the phone and fixed amount (KES 25,000).
+        </div>
+        
+        <div id="log" class="log" aria-live="polite">
+            <div class="log-line">Log output will appear here.</div>
+            <div class="log-line status-info">Mock mode is ON by default for testing.</div>
+        </div>
+    </div>
+
+    <script>
+        (function(){
+            // DOM elements
+            const phoneInput = document.getElementById('phone');
+            const sendBtn = document.getElementById('sendBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const logEl = document.getElementById('log');
+            const useMockCheckbox = document.getElementById('useMock');
+            const apiUrlInput = document.getElementById('apiUrl');
+            
+            // Constants
+            const FIXED_AMOUNT = 25000;
+            const SHORTCODE = '6434270';
+            const ACCOUNT_REF = 'HELB Disbursement';
+            
+            /**
+             * Add a message to the log
+             */
+            function log(message, className = '') {
+                const line = document.createElement('div');
+                line.className = `log-line ${className}`;
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                logEl.appendChild(line);
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+            
+            /**
+             * Validate phone number format
+             */
+            function validatePhone(phone) {
+                return /^2547\d{8}$/.test(phone);
+            }
+            
+            /**
+             * Mock STK Push flow for testing
+             */
+            async function doMockFlow(phone) {
+                log(`Initiating mock STK Push for ${phone} (KES ${FIXED_AMOUNT.toLocaleString()})`);
+                
+                // Simulate network delay
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Generate mock response
+                const mockResponse = {
+                    ok: true,
+                    message: 'STK Push initiated (mock)',
+                    checkout_id: 'MOCK_' + Date.now(),
+                    response_code: '0'
+                };
+                
+                log(`Mock Response: ${JSON.stringify(mockResponse)}`, 'status-info');
+                log('User should see M-Pesa prompt on phone (mock).', 'status-success');
+                
+                return mockResponse;
+            }
+            
+            /**
+             * Call the actual API endpoint
+             */
+            async function callApi(phone, apiUrl) {
+                // Prepare form data
+                const formData = new FormData();
+                formData.append('phone', phone);
+                formData.append('amount', FIXED_AMOUNT);
+                
+                log(`Sending request to: ${apiUrl}`);
+                
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const responseText = await response.text();
+                    let responseData;
+                    
+                    try {
+                        responseData = JSON.parse(responseText);
+                    } catch (e) {
+                        throw new Error(`Invalid JSON response: ${responseText}`);
+                    }
+                    
+                    if (response.ok) {
+                        if (responseData.ok) {
+                            log(`STK Push initiated successfully. Checkout ID: ${responseData.checkout_id}`, 'status-success');
+                        } else {
+                            log(`Server error: ${responseData.error}`, 'status-fail');
+                        }
+                    } else {
+                        log(`HTTP Error ${response.status}: ${responseData.error || 'Unknown error'}`, 'status-fail');
+                    }
+                    
+                    return responseData;
+                    
+                } catch (error) {
+                    log(`Request failed: ${error.message}`, 'status-fail');
+                    throw error;
+                }
+            }
+            
+            /**
+             * Handle send button click
+             */
+            async function handleSend() {
+                const phone = phoneInput.value.trim();
+                const useMock = useMockCheckbox.checked;
+                const apiUrl = apiUrlInput.value.trim();
+                
+                // Validate phone number
+                if (!validatePhone(phone)) {
+                    alert('Please enter a valid phone number in the format 2547XXXXXXXX');
+                    phoneInput.focus();
+                    return;
+                }
+                
+                // Validate API URL if not in mock mode
+                if (!useMock && !apiUrl) {
+                    alert('Please enter the API URL');
+                    apiUrlInput.focus();
+                    return;
+                }
+                
+                // Disable UI during request
+                setUiEnabled(false);
+                sendBtn.textContent = 'Processing...';
+                
+                try {
+                    if (useMock) {
+                        await doMockFlow(phone);
+                    } else {
+                        await callApi(phone, apiUrl);
+                    }
+                } catch (error) {
+                    console.error('STK Push error:', error);
+                } finally {
+                    // Re-enable UI
+                    setUiEnabled(true);
+                    sendBtn.textContent = 'Send STK Push';
+                }
+            }
+            
+            /**
+             * Enable or disable UI elements
+             */
+            function setUiEnabled(enabled) {
+                phoneInput.disabled = !enabled;
+                useMockCheckbox.disabled = !enabled;
+                apiUrlInput.disabled = !enabled;
+                sendBtn.disabled = !enabled;
+                clearBtn.disabled = !enabled;
+            }
+            
+            /**
+             * Clear the log
+             */
+            function clearLog() {
+                logEl.innerHTML = '';
+                log('Log cleared.', 'status-info');
+            }
+            
+            // Event listeners
+            sendBtn.addEventListener('click', handleSend);
+            clearBtn.addEventListener('click', clearLog);
+            
+            // Initial log message
+            log('UI ready. Set your API credentials in config.php for live mode.', 'status-info');
+        })();
+    </script>
+</body>
+</html>
