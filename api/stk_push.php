@@ -1,21 +1,22 @@
 <?php
+/**
+ * M-Pesa STK Push Implementation for HELB Disbursement
+ */
+
+// Set content type
 header('Content-Type: application/json');
 
-// ===== CONFIG =====
-// Leave sandbox=true for testing. Switch to false for production (live endpoints & live credentials).
-$sandbox = true;
+// Load configuration
+require_once __DIR__ . '/../config/config.php';
 
-// Put your Daraja credentials here. DO NOT commit live credentials to public repos.
-$consumerKey = '';
-$consumerSecret = '';
-$shortcode = '6434270'; // Till or Paybill
-$passkey = '';
-$callbackURL = ''; // e.g. https://yourdomain.com/api/callback.php
-$accountRef = 'HELB Disbursement';
+// Validate request method
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['ok' => false, 'error' => 'Method not allowed']);
+    exit;
+}
 
-// ===== END CONFIG =====
-
-// Simple POST validation
+// Validate required parameters
 $phone = isset($_POST['phone']) ? trim($_POST['phone']) : null;
 $amount = isset($_POST['amount']) ? intval($_POST['amount']) : null;
 
@@ -25,93 +26,132 @@ if (!$phone || !$amount) {
     exit;
 }
 
+// Validate phone format
 if (!preg_match('/^2547\d{8}$/', $phone)) {
     http_response_code(400);
-    echo json_encode(['ok' => false, 'error' => 'Invalid phone format']);
+    echo json_encode(['ok' => false, 'error' => 'Invalid phone format. Use format: 2547XXXXXXXX']);
     exit;
 }
 
-// Choose endpoints
-if ($sandbox) {
-    $authURL = 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials';
-    $stkURL = 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest';
-} else {
-    $authURL = 'https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials';
-    $stkURL = 'https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest';
-}
-
-// 1) Get OAuth token
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $authURL);
-curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json; charset=utf8']);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_USERPWD, $consumerKey . ':' . $consumerSecret);
-$result = curl_exec($ch);
-$err = curl_error($ch);
-curl_close($ch);
-
-if ($err) {
-    http_response_code(502);
-    echo json_encode(['ok' => false, 'error' => 'Auth request failed', 'detail' => $err]);
+// Validate amount
+if ($amount <= 0 || $amount > 150000) {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => 'Invalid amount. Must be between 1 and 150,000']);
     exit;
 }
 
-$tokenData = json_decode($result, true);
-if (!isset($tokenData['access_token'])) {
-    http_response_code(502);
-    echo json_encode(['ok' => false, 'error' => 'Failed to obtain access token', 'raw' => $result]);
-    exit;
-}
-$accessToken = $tokenData['access_token'];
-
-// 2) Prepare STK Push payload
-$timestamp = date('YmdHis');
-$password = base64_encode($shortcode . $passkey . $timestamp);
-
-$payload = [
-    'BusinessShortCode' => $shortcode,
-    'Password' => $password,
-    'Timestamp' => $timestamp,
-    'TransactionType' => 'CustomerBuyGoodsOnline',
-    'Amount' => $amount,
-    'PartyA' => $phone,
-    'PartyB' => $shortcode,
-    'PhoneNumber' => $phone,
-    'CallBackURL' => $callbackURL,
-    'AccountReference' => $accountRef,
-    'TransactionDesc' => 'HELB Disbursement'
-];
-
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $stkURL);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Content-Type: application/json',
-    'Authorization: Bearer ' . $accessToken
-]);
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-$response = curl_exec($ch);
-$err = curl_error($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-
-if ($err) {
-    http_response_code(502);
-    echo json_encode(['ok' => false, 'error' => 'STK request failed', 'detail' => $err]);
-    exit;
-}
-
-// Try to decode response
-$respData = json_decode($response, true);
-if ($httpCode >= 200 && $httpCode < 300) {
-    // Return the raw response; frontend expects { ok: true, checkout_id: ... } on success from your server
-    // Some implementations wrap response; we normalize:
-    $out = ['ok' => true, 'raw' => $respData];
-    if (isset($respData['CheckoutRequestID'])) $out['checkout_id'] = $respData['CheckoutRequestID'];
-    if (isset($respData['ResponseCode'])) $out['response_code'] = $respData['ResponseCode'];
-    echo json_encode($out);
-} else {
+try {
+    // Get access token
+    $accessToken = getAccessToken();
+    
+    // Initiate STK push
+    $response = initiateSTKPush($accessToken, $phone, $amount);
+    
+    // Return success response
+    echo json_encode([
+        'ok' => true, 
+        'checkout_id' => $response['CheckoutRequestID'],
+        'response_code' => $response['ResponseCode'],
+        'message' => 'STK push initiated successfully'
+    ]);
+    
+} catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['ok' => false, 'http' => $httpCode, 'raw' => $respData]);
+    echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
 }
+
+/**
+ * Get OAuth access token from Daraja API
+ */
+function getAccessToken() {
+    global $sandbox, $consumerKey, $consumerSecret;
+    
+    $authURL = $sandbox 
+        ? 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials'
+        : 'https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials';
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $authURL);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_USERPWD, $consumerKey . ':' . $consumerSecret);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    
+    $response = curl_exec($ch);
+    $err = curl_error($ch);
+    curl_close($ch);
+    
+    if ($err) {
+        throw new Exception('Auth request failed: ' . $err);
+    }
+    
+    $tokenData = json_decode($response, true);
+    if (!isset($tokenData['access_token'])) {
+        throw new Exception('Failed to obtain access token: ' . $response);
+    }
+    
+    return $tokenData['access_token'];
+}
+
+/**
+ * Initiate STK Push request
+ */
+function initiateSTKPush($accessToken, $phone, $amount) {
+    global $sandbox, $shortcode, $passkey, $callbackURL, $accountRef;
+    
+    $stkURL = $sandbox
+        ? 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest'
+        : 'https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest';
+    
+    // Generate password
+    $timestamp = date('YmdHis');
+    $password = base64_encode($shortcode . $passkey . $timestamp);
+    
+    // Prepare payload
+    $payload = [
+        'BusinessShortCode' => $shortcode,
+        'Password' => $password,
+        'Timestamp' => $timestamp,
+        'TransactionType' => 'CustomerBuyGoodsOnline',
+        'Amount' => $amount,
+        'PartyA' => $phone,
+        'PartyB' => $shortcode,
+        'PhoneNumber' => $phone,
+        'CallBackURL' => $callbackURL,
+        'AccountReference' => $accountRef,
+        'TransactionDesc' => 'HELB Disbursement'
+    ];
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $stkURL);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . $accessToken
+    ]);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    
+    $response = curl_exec($ch);
+    $err = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($err) {
+        throw new Exception('STK request failed: ' . $err);
+    }
+    
+    $responseData = json_decode($response, true);
+    
+    if ($httpCode !== 200 || !isset($responseData['ResponseCode'])) {
+        throw new Exception('STK push failed: ' . $response);
+    }
+    
+    if ($responseData['ResponseCode'] !== '0') {
+        throw new Exception('STK push error: ' . $responseData['ResponseDescription']);
+    }
+    
+    return $responseData;
+}
+?>
