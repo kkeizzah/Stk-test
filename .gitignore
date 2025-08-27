@@ -1,0 +1,27 @@
+# Sensitive files
+config/config.php
+.env
+
+# Logs
+logs/*
+!.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node modules
+node_modules/
+
+# Composer
+vendor/
+composer.lock
+
+# Local development
+*.local
